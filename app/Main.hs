@@ -1,16 +1,18 @@
 module Main where
 
-import Nightfall.MASM
-import Control.Monad.State
-import Nightfall.Targets.Miden
 import Examples.Simple
 import Examples.Cond
 import Examples.Loops
 import Examples.Fun
 import Examples.Inputs
+
+import Nightfall.Alphabet
+import Nightfall.MASM
+import Nightfall.Targets.Miden
+
+import Control.Monad.State
 import Data.Map as Map
 import System.Environment (getArgs, getProgName)
-import Control.Monad ( when )
 
 main :: IO ()
 main = do
@@ -45,11 +47,11 @@ main = do
                 examples = unlines . Prelude.map ("    "++) . Map.keys $ allProgs
             error $ str ++ examples
         Just prog -> do
-            let cfg = defaultConfig { cgfTraceVariablesDecl = True
-                                    , cfgTraceVariablesUsage = True
+            let cfg = defaultConfig { _cgfTraceVariablesDecl = True
+                                    , _cfgTraceVariablesUsage = True
                                     }
-                context = defaultContext { config = cfg }
-            let (midenProg, _) = runState (transpile prog) context
+                context = defaultContext { _config = cfg }
+            let (midenProg, _) = runState (transpileZKProgram prog) context
             return midenProg
 
     -- Check if the user provided a path to write the program

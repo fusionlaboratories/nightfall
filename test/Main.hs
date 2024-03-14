@@ -25,7 +25,6 @@ import qualified Data.ByteString.Lazy as Lazy
 import Data.Char
 import Data.List.Split (chunksOf)
 import qualified Data.Map.Strict as Map
-import Data.Maybe
 import Data.String
 import Data.Word
 import System.FilePath
@@ -37,8 +36,8 @@ import Test.Tasty.HUnit
 -- TODO: handle @advice_map@ too.
 replaceSecretInputsFileWithItsContents :: Module -> Module
 replaceSecretInputsFileWithItsContents modul = modul
-    { moduleSecretInputs = do
-        path <- moduleSecretInputs modul
+    { _moduleSecretInputs = do
+        path <- _moduleSecretInputs modul
         let adviceStack = either error id $ do
                 obj <- unsafePerformIO $ eitherDecodeFileStrict path
                 parseEither (.: "advice_stack") obj
@@ -69,16 +68,17 @@ test_examplesGolden =
         , goldenExample simpleIfProg
         , goldenExample ifVarProg
         , goldenExample simpleInfProg
+        , goldenExample simpleNat
         ]
   where
     goldenExample prog =
         let context = defaultContext
-                { config = defaultConfig
-                    { cgfTraceVariablesDecl = True
-                    , cfgTraceVariablesUsage = True
+                { _config = defaultConfig
+                    { _cgfTraceVariablesDecl = True
+                    , _cfgTraceVariablesUsage = True
                     }
                 }
-            (masm, _) = runState (transpile prog) context
+            (masm, _) = runState (transpileZKProgram prog) context
             name = filter isAlphaNum $ pName prog
             path = "test" </> "golden" </> name
         in testGroup name $
@@ -94,7 +94,7 @@ test_examplesGolden =
             [ goldenVsStringColored "result via list" (path ++ ".mres") $
                 fromString . either id show <$>
                     runMiden DontKeep Nothing (replaceSecretInputsFileWithItsContents masm)
-            | Right _ <- [moduleSecretInputs masm]
+            | Right _ <- [_moduleSecretInputs masm]
             ]
 
 -- Test cases taken from https://github.com/0xPolygonMiden/examples/blob/df0eeeeac29eab0e5e3d5cbe06921e372a189039/examples/advice_provider.masm
@@ -106,8 +106,8 @@ test_midenWordToHexKey =
         midenWordToHexKey @String (MidenWord 0 216172782113783808 51 0) @?=
             "0000000000000000000000000000000333000000000000000000000000000000"
 
-unsafeListToMidenWords :: [Felt] -> [MidenWord]
-unsafeListToMidenWords = map (fromMaybe (error "Bad 'MidenWord'") . listToMidenWord) . chunksOf 4
+unsafeFeltsToMidenWords :: [Felt] -> [MidenWord]
+unsafeFeltsToMidenWords = map unsafeFeltsToMidenWord . chunksOf 4
 
 test_displaySecretInputs :: TestTree
 test_displaySecretInputs =
@@ -116,10 +116,10 @@ test_displaySecretInputs =
             (42 : take 20 [0 ..] ++ take 20 [fromIntegral (maxBound :: Word32) ..])
             (Map.fromList
                 [ ( midenWordToHexKey $ MidenWord 0 216172782113783808 51 0
-                  , unsafeListToMidenWords $ take 4 [216172782113783809 ..]
+                  , unsafeFeltsToMidenWords $ take 4 [216172782113783809 ..]
                   )
                 , ( midenWordToHexKey $ MidenWord 1 2 3 4
-                  , unsafeListToMidenWords [36, 35 .. 21]
+                  , unsafeFeltsToMidenWords [36, 35 .. 21]
                   )
                 , ( midenWordToHexKey $ MidenWord 5 6 7 8
                   , []

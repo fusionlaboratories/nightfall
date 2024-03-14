@@ -7,11 +7,8 @@
 
 module Nightfall.Lang.Internal.Felt where
 
-import Data.Bifunctor
-import Data.Coerce
-import GHC.Generics
-import Data.Typeable
-import GHC.TypeNats hiding (Mod)
+import Nightfall.Alphabet
+
 import Data.Mod
 
 {- Note [Handling of integral types]
@@ -106,7 +103,7 @@ instance Read Felt where
 
 -- | Convert a 'Felt' to the corresponding 'Integer'.
 unFelt :: Felt -> Integer
-unFelt = coerce (toInteger . unMod)
+unFelt = coerce $ toInteger . unMod
 {-# INLINE unFelt #-}
 
 -- See Note [Handling of integral types].

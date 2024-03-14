@@ -12,7 +12,7 @@ simpleSecret secret = 10 * secret
 -}
 
 -- DSL version
-simpleSecretStmts :: Body ()
+simpleSecretStmts :: Body asm ()
 simpleSecretStmts = do
     comment "Simple program that outputs 10x the secret input"
     emptyLine

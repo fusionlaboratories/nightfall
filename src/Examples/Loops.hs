@@ -19,7 +19,7 @@ sumTo10 = sumTo10' 10 0
 -}
 
 -- DSL version
-sumTo10Stmts :: Body ()
+sumTo10Stmts :: Body asm ()
 sumTo10Stmts = do
     comment "Simple programs that sums numbers from 0 to 10."
     comment "It should return 55"

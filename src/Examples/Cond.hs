@@ -20,7 +20,7 @@ simpleIf = if 4 == 8
 -}
 
 -- | EDSL version
-simpleIfBody :: Body ()
+simpleIfBody :: Body asm ()
 simpleIfBody = do
     comment "Simple, stupid and trivial program that makes uses of a condition"
     comment "if (4 == 8) then return 10 else return 20"
@@ -49,7 +49,7 @@ simpleIf = let a = 145
 -}
 
 -- | EDSL version
-ifVarBody :: Body ()
+ifVarBody :: Body asm ()
 ifVarBody = do
     comment "Makes a if/else comparison on a moderately complex computation, involving variables"
     comment "It sums a=145 + b=79 and compares equality with target=203."
@@ -80,7 +80,7 @@ simpleInf = let n1 = 4238
 -}
 
 -- | EDSL version
-simpleInfBody :: Body ()
+simpleInfBody :: Body asm ()
 simpleInfBody = do
     comment "if n1=4238 <= n2=21987 then n1 else n2."
     comment "It should return 4238"

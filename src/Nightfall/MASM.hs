@@ -5,15 +5,14 @@
 {-# LANGUAGE OverloadedLists #-}
 module Nightfall.MASM where
 
-import Control.Monad
+import Nightfall.Alphabet
+import Nightfall.MASM.Callgraph
+import Nightfall.MASM.Types
+
 import Control.Monad.Writer.Strict
 
 import qualified Data.DList as DList
-import Data.Foldable
-import Data.Text (Text, pack, unpack)
-
-import Nightfall.MASM.Callgraph
-import Nightfall.MASM.Types
+import Data.Text (pack, unpack)
 
 comment :: Show a => a -> Instruction
 comment = Comment . pack . show
@@ -35,14 +34,14 @@ ppModule m = do
   -- TODO: pretty-print the inputs too, somehow? Even though we don't strictly need that, since
   -- 'runMiden' pretty-prints inputs itself anyway. Maybe at least as a comment in the code or
   -- or something?
-  tell $ DList.fromList $ fmap (("use."++) . unpack) (moduleImports m)
-  traverse_ ppProc . sortProcs $ moduleProcs m
-  ppProgram (moduleProg m)
+  tell $ DList.fromList $ fmap (("use."++) . unpack) (_moduleImports m)
+  traverse_ ppProc . sortProcs $ _moduleProcs m
+  ppProgram (_moduleProg m)
 
 ppProc :: (Text, Proc) -> PpMASM ()
 ppProc (name, p) = do
-  [ "proc." ++ unpack name ++ "." ++ show (procNLocals p) ]
-  indent $ traverse_ ppInstr (procInstrs p)
+  [ "proc." ++ unpack name ++ "." ++ show (_procNLocals p) ]
+  indent $ traverse_ ppInstr (_procInstrs p)
   "end"
 
 ppProgram :: Program -> PpMASM ()
@@ -111,6 +110,7 @@ ppInstr IMul = "u32wrapping_mul"
 ppInstr IDiv = "u32checked_div"
 ppInstr IMod = "u32checked_mod"
 ppInstr (IDivMod mk) = [ "u32checked_divmod" ++ maybe "" (\k -> "." ++ show k) mk ]
+ppInstr IMax = "u32checked_max"
 ppInstr IShL = "u32checked_shl"
 ppInstr IShR = "u32checked_shr"
 ppInstr (IEq mk) = [ "u32checked_eq" ++ maybe "" (\k -> "." ++ show k) mk ]
@@ -150,6 +150,8 @@ ppInstr IAnd64 = "exec.u64::checked_and"
 ppInstr IXor64 = "exec.u64::checked_xor"
 ppInstr IRotl64 = "exec.u64::unchecked_rotl"
 ppInstr IRotr64 = "exec.u64::unchecked_rotr"
+
+ppInstr IAdd256 = "exec.u256::add_unsafe"
 
 ppInstr Assert = "assert"
 ppInstr AssertZ = "assertz"

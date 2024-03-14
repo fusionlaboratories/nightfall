@@ -1,13 +1,14 @@
 {-# LANGUAGE NamedFieldPuns #-}
 module Nightfall.MASM.Callgraph where
 
-import qualified Data.Graph as Graph
-import Data.Map.Strict ( Map )
-import qualified Data.Map.Strict as Map
+import Nightfall.Alphabet
 import qualified Nightfall.MASM.Types as M
 
+import qualified Data.Graph as Graph
+import qualified Data.Map.Strict as Map
+
 findCalls :: M.Proc -> [M.ProcName]
-findCalls M.Proc {M.procInstrs} = findCalls' =<< procInstrs
+findCalls M.Proc {M._procInstrs} = findCalls' =<< _procInstrs
 
 findCalls' :: M.Instruction -> [M.ProcName]
 findCalls' (M.Exec name) = [name]

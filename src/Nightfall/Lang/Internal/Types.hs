@@ -1,3 +1,5 @@
+{-# LANGUAGE DeriveTraversable #-}
+
 module Nightfall.Lang.Internal.Types
     ( module Nightfall.Lang.Internal.Types
     , Felt
@@ -6,9 +8,8 @@ module Nightfall.Lang.Internal.Types
     , feltOrderInteger
     ) where
 
-import Data.String
-import Data.Word
-import GHC.Natural
+import Nightfall.Alphabet
+
 import Nightfall.Lang.Internal.Felt
 import Text.Printf (printf)
 
@@ -44,6 +45,7 @@ data VarType =
       VarFelt
     | VarBool
     | VarArrayOfFelt Word32  -- The argument is the length of the array.
+    | VarNat
     deriving (Eq, Show)
 
 -- | Unary operations.
@@ -59,7 +61,10 @@ data BinOp =
     | Sub     -- ^ @a - b@
     | Mul     -- ^ @a * b@
     | Div     -- ^ @a / b@ (integer division)
-    | IDiv32  -- ^ @a `quot` b@ with @a and b@ being 'Word32'
+    | IDiv32  -- ^ @a `quot` b@ with @a@ and @b@ being 'Word32'
+    | IMax32  -- ^ @a `max` b@ with @a@ and @b@ being 'Word32'
+    | Add256  -- ^ @a + b@ with @a@ and @b@ being 'Word256'
+    | AddNat  -- ^ @a + b@ with @a@ and @b@ being 'Natural'
 
     -- Boolean operations
     | Equal      -- ^ @a == b@
@@ -72,48 +77,53 @@ data BinOp =
 data Literal =
       LiteralFelt Felt
     | LiteralBool Bool
+    | LiteralNat Natural
     deriving (Eq, Show)
 
 -- | Expression, internal type, not exposed
-data Expr_ =
-      Literal Literal
+-- @asm@ is a type of assembly code that can be embedded into an expression. It's not meant to be
+-- used by the user, it's for compiler developers (it's often convenient to use Nightfall while
+-- compiling Nightfall).
+data Expr_ asm =
+      Assembly asm
+    | Literal Literal
 
-    | UnOp UnOp Expr_
-    | BinOp BinOp Expr_ Expr_
+    | UnOp UnOp (Expr_ asm)
+    | BinOp BinOp (Expr_ asm) (Expr_ asm)
 
     | Var VarName
 
-    | GetAt VarName Expr_
+    | GetAt VarName (Expr_ asm)
 
     -- | Functions
-    | FCall FunName [Expr_]
+    | FCall FunName [Expr_ asm]
 
     -- | Secret Input
     | NextSecret       -- ^ The next available secret input
     deriving (Eq, Show)
 
 -- | Simple, internal type, not exposed
-data Statement_ =
+data Statement_ asm =
     -- | Variable declaration
-      DeclVariable VarType VarName Expr_  -- ^ let a = 634
+      DeclVariable VarType VarName (Expr_ asm)  -- ^ let a = 634
     
     -- | Variable assignment
-    | AssignVar VarName Expr_     -- ^ a <- 368
+    | AssignVar VarName (Expr_ asm)     -- ^ a <- 368
 
-    | SetAt VarName Expr_ Expr_
+    | SetAt VarName (Expr_ asm) (Expr_ asm)
 
     -- | Conditionals
-    | IfElse Expr_ [Statement_] [Statement_] -- ^ condition if-block else-block
-    | Repeat Natural [Statement_]
-    | While Expr_ [Statement_]               -- ^ condition body
+    | IfElse (Expr_ asm) [Statement_ asm] [Statement_ asm] -- ^ condition if-block else-block
+    | Repeat Natural [Statement_ asm]
+    | While (Expr_ asm) [Statement_ asm]               -- ^ condition body
 
     -- | Naked function call
-    | NakedCall FunName [Expr_]
+    | NakedCall FunName [Expr_ asm]
 
     | InitArray VarName [Felt]
 
     -- | Return
-    | Return Expr_
+    | Return (Expr_ asm)
 
     -- | Comment
     | Comment String
@@ -126,31 +136,103 @@ ppVarType :: VarType -> String
 ppVarType VarFelt              = "felt"
 ppVarType VarBool              = "bool"
 ppVarType (VarArrayOfFelt len) = "[felt; " ++ show len ++ "]"
+ppVarType VarNat               = "nat"
 
 isArrayOfFelt :: VarType -> Bool
 isArrayOfFelt VarArrayOfFelt{} = True
 isArrayOfFelt _                = False
 
 -- | What Miden considers to be a Word.
-data MidenWord = MidenWord
-    { _midenWord0 :: Felt
-    , _midenWord1 :: Felt
-    , _midenWord2 :: Felt
-    , _midenWord3 :: Felt
-    } deriving (Eq, Ord, Show)
+data MidenWordOf a = MidenWord a a a a
+    deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
 
-midenWordToList :: MidenWord -> [Felt]
-midenWordToList (MidenWord x0 x1 x2 x3) = [x0, x1, x2, x3]
+type MidenWord = MidenWordOf Felt
 
--- | Convert a list of 'Felt's into a list of 'MidenWord's by padding each of the 'Felt's with
--- zeros.
-padListAsWords :: [Felt] -> [MidenWord]
-padListAsWords = map $ \x0 -> MidenWord x0 0 0 0
+_midenWord0 :: MidenWord -> Felt
+_midenWord0 (MidenWord x0 _ _ _) = x0
+
+_midenWord1 :: MidenWord -> Felt
+_midenWord1 (MidenWord _ x1 _ _) = x1
+
+_midenWord2 :: MidenWord -> Felt
+_midenWord2 (MidenWord _ _ x2 _) = x2
+
+_midenWord3 :: MidenWord -> Felt
+_midenWord3 (MidenWord _ _ _ x3) = x3
+
+-- | Convert a 'MidenWord' to a list of 'Felt's.
+-- The opposite of 'unsafeFeltsToMidenWord'.
+midenWordToFelts :: MidenWord -> [Felt]
+midenWordToFelts (MidenWord x0 x1 x2 x3) = [x0, x1, x2, x3]
+
+-- | Convert a list of 'Felt's to a list of 'MidenWord's by padding each of the 'Felt's with zeroes.
+padFeltsAsMidenWords :: [Felt] -> [MidenWord]
+padFeltsAsMidenWords = map $ \x0 -> MidenWord x0 0 0 0
 
 -- | Parse a list of 'Felt's as a 'MidenWord'.
-listToMidenWord :: [Felt] -> Maybe MidenWord
-listToMidenWord [x0, x1, x2, x3] = Just $ MidenWord x0 x1 x2 x3
-listToMidenWord _                = Nothing
+feltsToMidenWord :: [Felt] -> Maybe MidenWord
+feltsToMidenWord [x0, x1, x2, x3] = Just $ MidenWord x0 x1 x2 x3
+feltsToMidenWord _                = Nothing
+
+-- | Convert a list of 'Felt's to a 'MidenWord' or fail if the number of elements is not equal to 4.
+-- The opposite of 'midenWordToFelts'.
+unsafeFeltsToMidenWord :: [Felt] -> MidenWord
+unsafeFeltsToMidenWord = fromMaybe (error "Bad 'MidenWord'") . feltsToMidenWord
+
+-- | Append a value to a list as many times as necessary to create a list of the given length.
+--
+-- >>> map (\i -> (i, postpadTo i 'a' "bc")) [0..5]
+-- [(0,"bc"),(1,"bc"),(2,"bc"),(3,"bca"),(4,"bcaa"),(5,"bcaaa")]
+postpadTo :: Int -> a -> [a] -> [a]
+postpadTo n0 xp = go n0 where
+    go 0 xs       = xs
+    go n []       = replicate n xp
+    go n (x : xs) = x : go (n - 1) xs
+
+-- | Convert a number to a list of limbs in the given base, in little-endian.
+--
+-- >>> toLeLimbsOf 10 (1 :: Int)
+-- [1]
+-- >>> toLeLimbsOf 10 (23 :: Int)
+-- [3,2]
+-- >>> toLeLimbsOf 10 (5246234 :: Int)
+-- [4,3,2,6,4,2,5]
+toLeLimbsOf :: Integral a => a -> a -> [a]
+toLeLimbsOf limbSize = go where
+    go x
+        | x < limbSize = [x]
+        | otherwise    = limb : go x'
+        where (x', limb) = x `quotRem` limbSize
+
+-- | Convert a 'Natural' to a list of 'MidenWord's. Each 'Felt' in the resulting 'MidenWord's
+-- represents a 'Word32' number.
+-- The opposite of 'midensWordToNatural'.
+--
+-- >>> naturalToMidenWords (5 + 2^!64 * 7 + 2^!128 * 2^!32 * 3)
+-- [MidenWord 5 0 7 0,MidenWord 0 3 0 0]
+-- >>> naturalToMidenWords (5 + 2^!64 * 7 + 2^!256 * 2^!32 * 3)
+-- [MidenWord 5 0 7 0,MidenWord 0 0 0 0,MidenWord 0 3 0 0]
+naturalToMidenWords :: Natural -> [MidenWord]
+naturalToMidenWords = map limb128toMidenWord . toLeLimbsOf (2 ^! 128) where
+    limb128toMidenWord =
+        unsafeFeltsToMidenWord . postpadTo 4 0 . map fromIntegral . toLeLimbsOf (2 ^! 32)
+
+-- | Convert a list of 'Felt's to a 'Natural'.
+feltsToNatural :: [Felt] -> Natural
+feltsToNatural = sum . zipWith mul (iterate (* 2 ^! 32) 1) where
+    mul :: Integer -> Felt -> Natural
+    mul x y = fromInteger $ x * unFelt y
+
+-- | Convert a list of 'MidenWord's to a 'Natural'.
+-- The opposite of 'midensWordToNatural' modulo zero words at the end and words that have 'Felt's
+-- greater than or equal to @2^!32@ in them.
+--
+-- >>> import Nightfall.Alphabet
+-- >>> let n = 5 + 2^!64 * 7 + 2^!256 * 2^!32 * 3
+-- >>> n == midenWordsToNatural (naturalToMidenWords n)
+-- True
+midenWordsToNatural :: [MidenWord] -> Natural
+midenWordsToNatural = feltsToNatural . concatMap midenWordToFelts
 
 {- Note [The encoding of keys in advice_map]
 Encoding of keys in an @advice_map@ happens at
@@ -248,4 +330,4 @@ midenWordToHexKey :: IsString str => MidenWord -> str
 midenWordToHexKey
     = fromString
     . concatMap (printf "%016x" . byteSwap64 . fromIntegral . unsafeUnFelt)
-    . midenWordToList
+    . midenWordToFelts

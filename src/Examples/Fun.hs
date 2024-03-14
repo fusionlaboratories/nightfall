@@ -21,7 +21,7 @@ collatzFixed = collatz' 10
 -}
 
 -- | DSL version
-collatzFixedStmts :: Body ()
+collatzFixedStmts :: Body asm ()
 collatzFixedStmts = do
     comment "Compute the Collatz sequence, starting from a fixed position: 10 and returns the length of the sequence."
     comment "It should return 7"
@@ -52,7 +52,7 @@ collatzPriv n = collatz' n
 -}
 
 -- | DSL version
-collatzPrivStmts :: Body ()
+collatzPrivStmts :: Body asm ()
 collatzPrivStmts = do
     comment "Compute the Collatz sequence, starting position taken from secret input"
     comment "It returns the length of the sequence"

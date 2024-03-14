@@ -1,22 +1,17 @@
 module Nightfall.MASM.Miden where
 
+import Nightfall.Alphabet
+import Nightfall.Lang.Internal.Types
 import Nightfall.Lang.Types
 import Nightfall.MASM
 import Nightfall.MASM.Types
-import Nightfall.Lang.Internal.Types
 
-import Control.Monad
-import Data.List
 import qualified Data.Map.Strict as Map
-import Data.Maybe
-import Data.Word
 import System.Directory
 import System.Exit
 import System.FilePath
-import System.IO
 import System.IO.Temp
 import System.Process
-import Text.Read
 
 data KeepFile = Keep FilePath | DontKeep
   deriving Show
@@ -49,7 +44,7 @@ displaySecretInputs (SecretInputs advStack advMap) = unlines $ concat
       ]
     ]
   where
-    displayKV hash wrds = show hash ++ ": " ++ show (concatMap midenWordToList wrds)
+    displayKV hash wrds = show hash ++ ": " ++ show (concatMap midenWordToFelts wrds)
 
 runMiden :: KeepFile -> Maybe Word32 -> Module -> IO (Either String [Felt])
 runMiden keep mayNumOutputs m =
@@ -62,7 +57,7 @@ runMiden keep mayNumOutputs m =
         let numOutputsPrefix =
                 maybe [] (\numOutputs -> ["--num-outputs", show numOutputs]) mayNumOutputs
         args <- mappend numOutputsPrefix <$> do
-            let inputsFileOrList = moduleSecretInputs m
+            let inputsFileOrList = _moduleSecretInputs m
             inputsIfAny <- case inputsFileOrList of
                 Left secretInputs -> do
                     hPutStrLn inputsHandle $ displaySecretInputs secretInputs

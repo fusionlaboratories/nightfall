@@ -1,4 +1,5 @@
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Examples.Simple ( trivial1Prog
                        , trivial2Prog
@@ -8,10 +9,13 @@ module Examples.Simple ( trivial1Prog
                        , simpleVar2Prog
                        , simpleVar3Prog
                        , simpleInitArray
+                       , simpleNat
                        ) where
 
-import Nightfall.Lang.Types
+import Nightfall.Alphabet
 import Nightfall.Lang.Syntax.Default
+import Nightfall.Lang.Types
+import Nightfall.Targets.Miden
 
 -- * Simplest, most trivial program that adds to fixed numbers, no variable, no inputs (public or secret)
 
@@ -22,7 +26,7 @@ trivial1 = 33 + 42
 -}
 
 -- | That's the EDSL version
-trivial1Body :: Body ()
+trivial1Body :: Body asm ()
 trivial1Body = do
     comment "Simply add fixed numbers 33 + 42, should output 75"
     ret $ add (lit 33) (lit 42)
@@ -43,7 +47,7 @@ trivial2 = 29 + 156 + 14
 -}
 
 -- | That's the EDSL version
-trivial2Body :: Body ()
+trivial2Body :: Body asm ()
 trivial2Body = do
     comment "Simply add three numbers, 29 + 156 + 14, should output 199"
     ret $ add (lit 29) (add (lit 156) (lit 14))
@@ -65,7 +69,7 @@ trivial3 = 1238 * (345 + 78)
 -}
 
 -- | That's the EDSL version
-trivial3Body :: Body ()
+trivial3Body :: Body asm ()
 trivial3Body = do
     comment "Perform an addition followed by a multipication, 1238 * (345 + 78), should output 523674"
     ret $ mul (lit 1238) (add (lit 345) (lit 78))
@@ -86,7 +90,7 @@ trivial4 = 52 * (11 - 1)
 -}
 
 -- | That's the EDSL version
-trivial4Body :: Body ()
+trivial4Body :: Body asm ()
 trivial4Body = do
     comment "Performs 52 * (11 - 1), written with Num instance, should output 520"
     ret $ 52 * (11 - 1)
@@ -109,7 +113,7 @@ simpleVar1 = let a = 999
 
 
 -- EDSL version
-simpleVar1Body :: Body ()
+simpleVar1Body :: Body asm ()
 simpleVar1Body = do
     comment "Simple addition, but with a variable storing a value"
     comment "a = 999"
@@ -138,7 +142,7 @@ simpleVar2 = let a = 888
 
 
 -- EDSL version
-simpleVar2Body :: Body ()
+simpleVar2Body :: Body asm ()
 simpleVar2Body = do
     comment "Simple subtraction, but uses three variables"
     comment "a = 888, b = 222"
@@ -158,7 +162,7 @@ simpleVar2Prog = ZKProgram { pName = "simple var 2"
 
 -- * Simple program that overwrite the values of a variable several times
 
-simpleVar3Body :: Body ()
+simpleVar3Body :: Body asm ()
 simpleVar3Body = do
     comment "Rewrite on the same variable several times"
     comment "a = 10, b = 20, a = 50, a + b. Should return 70"
@@ -178,3 +182,11 @@ simpleInitArray = mkSimpleProgram "simple initArray" $ do
     setAt "arr" 3 1
     comment "arr[1] + oldArrAt3 + arr[3] + arr[4] = 0 + 885 + 1 + 4 = 890"
     ret $ getAt "arr" 1 + get oldArrAt3 + getAt "arr" 3 + getAt "arr" 4
+
+simpleNat :: ZKProgram
+simpleNat = mkSimpleProgram "simple nat" $ do
+    initArray "fakeArr" []
+    _ <- declareOf Nat "n" . lit $ 5 + 2^!64 * 7 + 2^!128 * 3
+    comment "n[0] + n[1] = 5 + 3 = 8"
+    let getLimbAt i = getAt "fakeArr" (lit $ dynamicMemoryHead + i + 1)
+    ret $ getLimbAt 0 + getLimbAt 1
